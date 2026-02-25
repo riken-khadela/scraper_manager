@@ -1,0 +1,68 @@
+<table>
+    <thead>
+        <tr>
+            <th>Scraper Name</th>
+            <th>Main Group</th>
+            <th>Status</th>
+            <th>Last Run</th>
+            <th>Next Scheduled</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in watcher_data %}
+        <tr>
+            <td>
+                <a href="/scrapers/{{ item.sub.main_scraper_id }}/sub/{{ item.sub.id }}/"
+                    style="color:var(--text-primary);font-weight:500">{{ item.sub.name }}</a>
+            </td>
+            <td>
+                <a href="/scrapers/{{ item.sub.main_scraper_id }}/"
+                    style="color:var(--text-secondary)">{{ item.sub.main_scraper.name }}</a>
+            </td>
+            <td>
+                {% if item.is_running %}
+                <span class="badge badge--running"><span class="run-dot"></span>Running</span>
+                {% elif item.status == 'success' %}
+                <span class="badge badge--success">Success</span>
+                {% elif item.status == 'failed' %}
+                <span class="badge badge--failed">Failed</span>
+                {% else %}
+                <span class="badge badge--never_run">Never Run</span>
+                {% endif %}
+            </td>
+            <td class="font-mono text-sm">
+                {% if item.last_run %}
+                {{ item.last_run.started_at.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}—{% endif %}
+            </td>
+            <td class="font-mono text-sm">
+                {% if item.next_run %}
+                {{ item.next_run.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}—{% endif %}
+            </td>
+            <td>
+                {% if item.is_running %}
+                <button class="btn btn--danger btn--sm"
+                    onclick="stopScraper({{ item.sub.id }}, {{ item.sub.main_scraper_id }}, '{{ item.sub.name }}', {{ item.process.pid if item.process else 0 }})">
+                    Stop
+                </button>
+                {% else %}
+                <button class="btn btn--success btn--sm"
+                    onclick="runScraper({{ item.sub.id }}, {{ item.sub.main_scraper_id }}, '{{ item.sub.name }}', '{{ item.sub.run_command }}')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Run
+                </button>
+                {% endif %}
+            </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">
+            <div class="empty-state" style="padding:30px">
+                <h3>No active scrapers</h3>
+                <p>Add some scrapers to start monitoring</p>
+            </div>
+        </td></tr>
+        {% endfor %}
+    </tbody>
+</table>

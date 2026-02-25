@@ -1,0 +1,604 @@
+{% extends "base.html" %}
+
+{% block title %}Terminal — {{ sub.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/">{{ sub.name }}</a>
+<span class="sep">/</span>
+<span class="current">Terminal</span>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Terminal Page Layout ─────────────────────────────────── */
+.terminal-page { display: flex; flex-direction: column; gap: 16px; }
+
+/* ── Terminal Header Card ─────────────────────────────────── */
+.terminal-header-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.terminal-info { display: flex; align-items: center; gap: 14px; }
+.terminal-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  border: 1px solid #30d158;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 12px rgba(48, 209, 88, 0.2);
+  flex-shrink: 0;
+}
+.terminal-meta h2 { font-size: 16px; font-weight: 600; color: var(--text-primary); margin: 0; }
+.terminal-meta p  { font-size: 12px; color: var(--text-muted); margin: 4px 0 0; font-family: var(--font-mono); }
+.terminal-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── Status Badge ─────────────────────────────────────────── */
+.status-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 5px 12px; border-radius: 20px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+  transition: all 0.3s ease;
+}
+.status-pill.running {
+  background: rgba(48, 209, 88, 0.12);
+  border: 1px solid rgba(48, 209, 88, 0.4);
+  color: #30d158;
+}
+.status-pill.stopped {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+.status-pill.failed {
+  background: rgba(255, 69, 58, 0.1);
+  border: 1px solid rgba(255, 69, 58, 0.4);
+  color: #ff453a;
+}
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #30d158;
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* ── Terminal Window ──────────────────────────────────────── */
+.terminal-window {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+  max-height: 680px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.terminal-titlebar {
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.term-dots { display: flex; gap: 6px; }
+.term-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  transition: filter 0.2s;
+}
+.term-dot:hover { filter: brightness(1.3); }
+.term-dot-red    { background: #ff5f57; }
+.term-dot-yellow { background: #ffbd2e; }
+.term-dot-green  { background: #28c941; }
+.term-title {
+  font-family: var(--font-mono); font-size: 12px;
+  color: #8b949e; flex: 1; text-align: center;
+}
+.term-toolbar {
+  display: flex; align-items: center; gap: 8px; margin-left: auto;
+}
+.term-btn {
+  background: rgba(255,255,255,0.06); border: 1px solid #30363d;
+  color: #8b949e; border-radius: 6px; padding: 3px 9px;
+  font-size: 11px; font-family: var(--font-mono); cursor: pointer;
+  transition: all 0.15s;
+}
+.term-btn:hover { background: rgba(255,255,255,0.12); color: #c9d1d9; }
+
+/* ── Log Output Area ──────────────────────────────────────── */
+.terminal-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: #c9d1d9;
+  scroll-behavior: smooth;
+}
+.terminal-output::-webkit-scrollbar { width: 6px; }
+.terminal-output::-webkit-scrollbar-track { background: transparent; }
+.terminal-output::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+.terminal-output::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+.tlog-line {
+  display: flex; gap: 10px; padding: 1px 0;
+  border-radius: 3px;
+  transition: background 0.1s;
+}
+.tlog-line:hover { background: rgba(255,255,255,0.03); }
+.tlog-num  { color: #3d444d; user-select: none; min-width: 36px; text-align: right; flex-shrink: 0; }
+.tlog-text { word-break: break-all; white-space: pre-wrap; }
+
+.tlog-line.l-error   .tlog-text { color: #ff7b72; }
+.tlog-line.l-warning .tlog-text { color: #e3b341; }
+.tlog-line.l-success .tlog-text { color: #56d364; }
+.tlog-line.l-info    .tlog-text { color: #79c0ff; }
+.tlog-line.l-debug   .tlog-text { color: #6e7681; }
+.tlog-line.l-input   .tlog-text { color: #f0883e; font-style: italic; }
+.tlog-line.l-default .tlog-text { color: #c9d1d9; }
+
+.term-empty {
+  color: #484f58; text-align: center;
+  padding: 60px 20px; font-family: var(--font-mono); font-size: 13px;
+}
+.term-waiting-cursor::after {
+  content: '█'; animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ── Input Row ────────────────────────────────────────────── */
+.terminal-input-row {
+  border-top: 1px solid #30363d;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0d1117;
+  flex-shrink: 0;
+}
+.term-prompt {
+  color: #30d158; font-family: var(--font-mono); font-size: 13px;
+  flex-shrink: 0; user-select: none;
+}
+.term-input {
+  flex: 1;
+  background: transparent;
+  border: none; outline: none;
+  color: #f0883e;
+  font-family: var(--font-mono); font-size: 13px;
+  caret-color: #30d158;
+}
+.term-input::placeholder { color: #3d444d; }
+.term-input:disabled { color: #3d444d; cursor: not-allowed; }
+.term-send-btn {
+  background: rgba(48, 209, 88, 0.12);
+  border: 1px solid rgba(48, 209, 88, 0.3);
+  color: #30d158;
+  border-radius: 6px; padding: 4px 12px;
+  font-size: 12px; font-family: var(--font-mono); cursor: pointer;
+  transition: all 0.15s;
+}
+.term-send-btn:hover:not(:disabled) { background: rgba(48, 209, 88, 0.22); }
+.term-send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ── Footer bar ───────────────────────────────────────────── */
+.terminal-footer {
+  background: #0d1117;
+  border-top: 1px solid #21262d;
+  padding: 7px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 11px; color: #484f58;
+  flex-shrink: 0;
+}
+.footer-right { display: flex; gap: 16px; align-items: center; }
+.auto-scroll-label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.auto-scroll-label input { cursor: pointer; }
+
+/* ── Run / Stop buttons ───────────────────────────────────── */
+.btn--run {
+  background: linear-gradient(135deg, #1a7f37, #2ea043);
+  border: 1px solid #3fb950;
+  color: #fff; border-radius: 8px;
+  padding: 8px 18px; font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 7px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn--run:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(46,160,67,0.4); }
+.btn--run:disabled  { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn--stop {
+  background: linear-gradient(135deg, #8b0000, #c0392b);
+  border: 1px solid #e74c3c;
+  color: #fff; border-radius: 8px;
+  padding: 8px 18px; font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 7px;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn--stop:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(231,76,60,0.4); }
+.btn--stop:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="terminal-page">
+
+  <!-- ── Header Card ─────────────────────────────────────── -->
+  <div class="terminal-header-card">
+    <div class="terminal-info">
+      <div class="terminal-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2" width="20" height="20">
+          <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+      </div>
+      <div class="terminal-meta">
+        <h2>{{ sub.name }}</h2>
+        <p>{{ sub.run_command|default("No command configured") }}</p>
+      </div>
+    </div>
+
+    <div class="terminal-controls">
+      <!-- Status pill — updated by JS polling -->
+      <span id="status-pill" class="status-pill {% if is_running %}running{% else %}stopped{% endif %}">
+        {% if is_running %}
+          <span class="pulse-dot"></span> Running
+        {% else %}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><circle cx="12" cy="12" r="10"/></svg>
+          Idle
+        {% endif %}
+      </span>
+
+      <button id="run-btn" class="btn--run" onclick="doRun()"
+        {% if is_running or not sub.run_command %}disabled{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        Run
+      </button>
+
+      <button id="stop-btn" class="btn--stop" onclick="doStop()"
+        {% if not is_running %}disabled{% endif %}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+        </svg>
+        Stop
+      </button>
+
+      <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/" class="btn btn--ghost btn--sm">← Back</a>
+    </div>
+  </div>
+
+  <!-- ── Terminal Window ─────────────────────────────────── -->
+  <div class="terminal-window">
+
+    <!-- Title bar -->
+    <div class="terminal-titlebar">
+      <div class="term-dots">
+        <div class="term-dot term-dot-red"    onclick="doStop()" title="Stop"></div>
+        <div class="term-dot term-dot-yellow"></div>
+        <div class="term-dot term-dot-green"  onclick="doRun()" title="Run"></div>
+      </div>
+      <span class="term-title" id="term-title-text">{{ sub.name }} — terminal</span>
+      <div class="term-toolbar">
+        <button class="term-btn" onclick="clearTerminal()">Clear</button>
+        <button class="term-btn" onclick="scrollBottom()">↓ Bottom</button>
+      </div>
+    </div>
+
+    <!-- Output area -->
+    <div class="terminal-output" id="term-output">
+      <div class="term-empty term-waiting-cursor" id="term-placeholder">
+        Waiting for output…
+      </div>
+    </div>
+
+    <!-- Stdin input row -->
+    <div class="terminal-input-row">
+      <span class="term-prompt">›</span>
+      <input
+        class="term-input" id="term-input"
+        type="text"
+        placeholder="{% if is_running %}Type input and press Enter…{% else %}Start the scraper to enable input{% endif %}"
+        {% if not is_running %}disabled{% endif %}
+        autocomplete="off" spellcheck="false"
+      >
+      <button class="term-send-btn" id="send-btn" onclick="sendInput()" {% if not is_running %}disabled{% endif %}>
+        Send ↵
+      </button>
+    </div>
+
+    <!-- Footer -->
+    <div class="terminal-footer">
+      <span id="footer-status">Ready</span>
+      <div class="footer-right">
+        <span id="footer-lines">0 lines</span>
+        <label class="auto-scroll-label">
+          <input type="checkbox" id="auto-scroll" checked>
+          Auto-scroll
+        </label>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- hidden data -->
+<meta name="csrf-token" content="{{ csrf_token }}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SUB_ID      = {{ sub.id }};
+const MAIN_ID     = {{ main_scraper.id }};
+const CSRF_TOKEN  = document.querySelector('meta[name="csrf-token"]').content;
+
+let logOffset      = 0;       // lines already rendered
+let pollInterval   = null;    // log polling timer
+let statusInterval = null;    // status polling timer
+let isRunning      = {{ 'true' if is_running else 'false' }};
+
+// ── Helpers ─────────────────────────────────────────────────
+function csrfFetch(url, opts = {}) {
+  return fetch(url, {
+    ...opts,
+    headers: {
+      'X-CSRFToken': CSRF_TOKEN,
+      'Content-Type': 'application/json',
+      ...(opts.headers || {}),
+    },
+  });
+}
+
+function getLogLevel(line) {
+  const lu = line.toUpperCase();
+  if (/\b(ERROR|EXCEPTION|TRACEBACK|CRITICAL)\b/.test(lu))  return 'l-error';
+  if (/\b(WARN(ING)?)\b/.test(lu))                          return 'l-warning';
+  if (/\b(SUCCESS|DONE|COMPLETE|FINISHED)\b/.test(lu))      return 'l-success';
+  if (/\b(INFO)\b/.test(lu))                                return 'l-info';
+  if (/\b(DEBUG)\b/.test(lu))                               return 'l-debug';
+  return 'l-default';
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function scrollBottom() {
+  const out = document.getElementById('term-output');
+  out.scrollTop = out.scrollHeight;
+}
+
+function clearTerminal() {
+  logOffset = 0;
+  document.getElementById('term-output').innerHTML =
+    '<div class="term-empty term-waiting-cursor" id="term-placeholder">Waiting for output…</div>';
+  document.getElementById('footer-lines').textContent = '0 lines';
+}
+
+// ── Log Polling ─────────────────────────────────────────────
+async function fetchLogs() {
+  try {
+    const res  = await fetch(`/api/live-log/${SUB_ID}/?offset=${logOffset}`);
+    const data = await res.json();
+
+    if (data.error) return;
+
+    if (data.lines && data.lines.length > 0) {
+      const placeholder = document.getElementById('term-placeholder');
+      if (placeholder) placeholder.remove();
+
+      const out = document.getElementById('term-output');
+      const frag = document.createDocumentFragment();
+
+      data.lines.forEach((line, i) => {
+        const globalIdx = logOffset + i + 1;
+        const level = getLogLevel(line);
+        const div = document.createElement('div');
+        div.className = `tlog-line ${level}`;
+        div.innerHTML = `<span class="tlog-num">${globalIdx}</span><span class="tlog-text">${esc(line)}</span>`;
+        frag.appendChild(div);
+      });
+
+      out.appendChild(frag);
+      logOffset = data.total;
+
+      document.getElementById('footer-lines').textContent = `${data.total} lines`;
+
+      if (document.getElementById('auto-scroll').checked) {
+        scrollBottom();
+      }
+    }
+
+    // If the server says it's no longer running but we thought it was, sync
+    if (!data.is_running && isRunning) {
+      syncStatus();
+    }
+
+  } catch(e) {
+    console.warn('Log fetch error:', e);
+  }
+}
+
+function startLogPolling() {
+  if (pollInterval) return;
+  fetchLogs(); // immediate first fetch
+  pollInterval = setInterval(fetchLogs, 1000);
+}
+
+function stopLogPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+// ── Status Polling ───────────────────────────────────────────
+async function syncStatus() {
+  try {
+    const res  = await fetch(`/api/status/${SUB_ID}/`);
+    const data = await res.json();
+    setRunningState(data.is_running, data.status);
+  } catch(e) {
+    console.warn('Status fetch error:', e);
+  }
+}
+
+function startStatusPolling() {
+  if (statusInterval) return;
+  statusInterval = setInterval(syncStatus, 2000);
+}
+
+function stopStatusPolling() {
+  if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+}
+
+// ── UI State ────────────────────────────────────────────────
+function setRunningState(running, statusText) {
+  isRunning = running;
+  const pill    = document.getElementById('status-pill');
+  const runBtn  = document.getElementById('run-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  const input   = document.getElementById('term-input');
+  const sendBtn = document.getElementById('send-btn');
+  const footer  = document.getElementById('footer-status');
+
+  if (running) {
+    pill.className  = 'status-pill running';
+    pill.innerHTML  = '<span class="pulse-dot"></span> Running';
+    runBtn.disabled = true;
+    stopBtn.disabled = false;
+    input.disabled  = false;
+    sendBtn.disabled = false;
+    input.placeholder = 'Type input and press Enter…';
+    footer.textContent = 'Script running…';
+    startLogPolling();
+  } else {
+    const label = statusText === 'success' ? '✓ Completed' :
+                  statusText === 'failed'  ? '✗ Failed'    : 'Idle';
+    pill.className  = `status-pill ${statusText === 'failed' ? 'failed' : 'stopped'}`;
+    pill.innerHTML  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><circle cx="12" cy="12" r="10"/></svg> ${label}`;
+    runBtn.disabled = false;
+    stopBtn.disabled = true;
+    input.disabled  = true;
+    sendBtn.disabled = true;
+    input.placeholder = 'Start the scraper to enable input';
+    footer.textContent = statusText === 'success' ? 'Script completed successfully' :
+                         statusText === 'failed'  ? 'Script exited with error'      : 'Ready';
+    stopLogPolling();
+    // Do one final log fetch to get any last lines
+    fetchLogs();
+  }
+}
+
+// ── Run ─────────────────────────────────────────────────────
+async function doRun() {
+  const runBtn = document.getElementById('run-btn');
+  if (runBtn.disabled) return;
+  runBtn.disabled = true;
+
+  // Clear old output
+  clearTerminal();
+  logOffset = 0;
+
+  try {
+    const res  = await csrfFetch(`/scrapers/${MAIN_ID}/sub/${SUB_ID}/run/`, { method: 'POST' });
+    const data = await res.json();
+
+    if (res.ok) {
+      appendSystemLine('▶ Script started — streaming output below…', 'l-info');
+      setRunningState(true, 'running');
+    } else {
+      appendSystemLine(`✗ Failed to start: ${data.message || 'Unknown error'}`, 'l-error');
+      runBtn.disabled = false;
+    }
+  } catch(e) {
+    appendSystemLine(`✗ Request error: ${e.message}`, 'l-error');
+    runBtn.disabled = false;
+  }
+}
+
+// ── Stop ────────────────────────────────────────────────────
+async function doStop() {
+  const stopBtn = document.getElementById('stop-btn');
+  if (stopBtn.disabled) return;
+  stopBtn.disabled = true;
+
+  try {
+    const res  = await csrfFetch(`/scrapers/${MAIN_ID}/sub/${SUB_ID}/stop/`, { method: 'POST' });
+    const data = await res.json();
+
+    if (res.ok) {
+      appendSystemLine('■ Script stopped by user.', 'l-warning');
+      setRunningState(false, 'failed');
+    } else {
+      appendSystemLine(`✗ Stop failed: ${data.message || 'Unknown error'}`, 'l-error');
+      stopBtn.disabled = false;
+    }
+  } catch(e) {
+    appendSystemLine(`✗ Request error: ${e.message}`, 'l-error');
+    stopBtn.disabled = false;
+  }
+}
+
+// ── Send stdin input ─────────────────────────────────────────
+async function sendInput() {
+  const inputEl = document.getElementById('term-input');
+  const text    = inputEl.value;
+  if (!text && text !== '') return;
+  if (!isRunning)           return;
+
+  // Echo input in terminal
+  appendSystemLine(`› ${text}`, 'l-input');
+  inputEl.value = '';
+
+  try {
+    await csrfFetch(`/api/send-input/${SUB_ID}/`, {
+      method: 'POST',
+      body: JSON.stringify({ input: text }),
+    });
+  } catch(e) {
+    appendSystemLine(`✗ Failed to send input: ${e.message}`, 'l-error');
+  }
+}
+
+// Append a synthetic system line (not from the log file)
+function appendSystemLine(text, level = 'l-default') {
+  const placeholder = document.getElementById('term-placeholder');
+  if (placeholder) placeholder.remove();
+
+  const out = document.getElementById('term-output');
+  const div = document.createElement('div');
+  div.className = `tlog-line ${level}`;
+  // Use em-dash as line number placeholder for system messages
+  div.innerHTML = `<span class="tlog-num">·</span><span class="tlog-text">${esc(text)}</span>`;
+  out.appendChild(div);
+
+  if (document.getElementById('auto-scroll').checked) scrollBottom();
+}
+
+// ── Keyboard shortcut: Enter to send ────────────────────────
+document.getElementById('term-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); sendInput(); }
+});
+
+// ── Init ────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  if (isRunning) {
+    startLogPolling();
+  } else {
+    // Try to load any existing log from a recent run
+    fetchLogs();
+  }
+  startStatusPolling();
+});
+</script>
+{% endblock %}

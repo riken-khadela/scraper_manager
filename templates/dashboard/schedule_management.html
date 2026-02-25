@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Schedule — {{ sub.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/">{{ sub.name }}</a>
+<span class="sep">/</span>
+<span class="current">Schedule</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Schedule — {{ sub.name }}</h1>
+        <p class="page-subtitle">Configure when this scraper runs automatically</p>
+    </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start">
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Schedule Configuration</span>
+        <span class="badge badge--{{ 'enabled' if schedule.is_enabled else 'disabled' }}">
+            {{ 'Enabled' if schedule.is_enabled else 'Disabled' }}
+        </span>
+    </div>
+    <div class="card-body">
+        {% if errors %}
+        <div style="margin-bottom:16px">
+            {% for key, msg in errors.items() %}
+            <div class="alert alert--error">{{ msg }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Mode Tabs -->
+        <div class="mode-tabs" id="mode-tabs">
+            <div class="mode-tab active" data-mode="simple" onclick="switchMode('simple')">Simple Mode</div>
+            <div class="mode-tab" data-mode="advanced" onclick="switchMode('advanced')">Advanced Mode</div>
+        </div>
+
+        <form method="post" id="schedule-form">
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            <input type="hidden" name="mode" id="mode-input" value="simple">
+
+            <!-- Simple Mode -->
+            <div id="simple-mode">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+                    Select up to 5 times per day when this scraper should run.
+                </p>
+                <div class="time-pickers" id="time-pickers">
+                    <div class="time-picker-slot">
+                        <input type="time" name="run_times" value="06:00">
+                        <button type="button" onclick="removeTimePicker(this)">×</button>
+                    </div>
+                    <div class="time-picker-slot">
+                        <input type="time" name="run_times" value="14:00">
+                        <button type="button" onclick="removeTimePicker(this)">×</button>
+                    </div>
+                    <div class="time-picker-slot">
+                        <input type="time" name="run_times" value="22:00">
+                        <button type="button" onclick="removeTimePicker(this)">×</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn--ghost btn--sm" style="margin-top:10px"
+                    onclick="addTimePicker()">+ Add Time</button>
+            </div>
+
+            <!-- Advanced Mode -->
+            <div id="advanced-mode" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Cron Expression</label>
+                    <input type="text" name="cron_string" id="cron-input" class="form-control mono"
+                        value="{{ schedule.cron_string }}"
+                        placeholder="0 6,14,22 * * *">
+                    <div class="form-hint">
+                        Format: minute hour day-of-month month day-of-week
+                        <br>Examples: <code>*/30 * * * *</code> (every 30 min) · <code>0 9 * * 1-5</code> (9am weekdays)
+                    </div>
+                    {% if errors and errors.cron_string %}
+                    <div class="form-error">{{ errors.cron_string }}</div>
+                    {% endif %}
+                </div>
+                <div id="cron-preview" style="margin-top:8px;font-size:13px;color:var(--text-secondary)"></div>
+            </div>
+
+            <hr class="divider">
+
+            <div class="form-group">
+                <label class="toggle-switch">
+                    <input type="checkbox" name="is_enabled" {% if schedule.is_enabled %}checked{% endif %}>
+                    <span class="toggle-track"></span>
+                    <span>Enable this schedule (activates Celery Beat periodic task)</span>
+                </label>
+            </div>
+
+            <div style="display:flex;gap:8px">
+                <button type="submit" class="btn btn--primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+                    Save Schedule
+                </button>
+                <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/" class="btn btn--ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Right panel: Current schedule info -->
+<div style="display:flex;flex-direction:column;gap:12px">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Current Schedule</span>
+        </div>
+        <div class="card-body">
+            <div style="margin-bottom:12px">
+                <div class="section-label">Cron Expression</div>
+                <div class="font-mono" style="font-size:18px;color:var(--text-primary);margin-top:4px">{{ schedule.cron_string }}</div>
+            </div>
+            <div style="margin-bottom:12px">
+                <div class="section-label">Readable</div>
+                <div style="color:var(--text-secondary);font-size:13px;margin-top:4px">{{ cron_readable }}</div>
+            </div>
+            <div>
+                <div class="section-label">Celery Task ID</div>
+                <div class="font-mono text-sm text-muted" style="margin-top:4px;word-break:break-all">{{ schedule.celery_task_id or 'Not registered' }}</div>
+            </div>
+        </div>
+    </div>
+
+    {% if next_runs %}
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Next 3 Runs</span>
+        </div>
+        <div class="card-body">
+            <div class="next-runs">
+                {% for run in next_runs %}
+                <div class="next-run-item">
+                    <div class="nr-idx">{{ loop.index }}</div>
+                    <div>
+                        <div class="nr-time">{{ run.strftime('%a, %b %d') }}</div>
+                        <div style="font-size:11px;color:var(--text-muted)">{{ run.strftime('%H:%M:%S') }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function switchMode(mode) {
+    document.getElementById('mode-input').value = mode;
+    document.querySelectorAll('.mode-tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.mode === mode);
+    });
+    document.getElementById('simple-mode').style.display = mode === 'simple' ? '' : 'none';
+    document.getElementById('advanced-mode').style.display = mode === 'advanced' ? '' : 'none';
+}
+
+function addTimePicker() {
+    const pickers = document.getElementById('time-pickers');
+    if (pickers.children.length >= 5) return;
+    const slot = document.createElement('div');
+    slot.className = 'time-picker-slot';
+    slot.innerHTML = `<input type="time" name="run_times" value="12:00"><button type="button" onclick="removeTimePicker(this)">×</button>`;
+    pickers.appendChild(slot);
+}
+
+function removeTimePicker(btn) {
+    const picks = document.getElementById('time-pickers');
+    if (picks.children.length > 1) {
+        btn.parentElement.remove();
+    }
+}
+
+// Cron preview
+const cronInput = document.getElementById('cron-input');
+if (cronInput) {
+    cronInput.addEventListener('input', updateCronPreview);
+}
+
+function updateCronPreview() {
+    // Basic client-side cron preview
+    const val = cronInput.value.trim();
+    const parts = val.split(/\s+/);
+    let preview = '';
+    if (parts.length === 5) {
+        preview = `✓ Valid: ${parts.join(' ')}`;
+    } else {
+        preview = `✗ Needs 5 parts (got ${parts.length})`;
+    }
+    document.getElementById('cron-preview').textContent = preview;
+}
+</script>
+{% endblock %}

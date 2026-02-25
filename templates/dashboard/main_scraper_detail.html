@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+
+{% block title %}{{ main_scraper.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/">Scrapers</a>
+<span class="sep">/</span>
+<span class="current">{{ main_scraper.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ main_scraper.name }}</h1>
+        <p class="page-subtitle">{{ main_scraper.description or 'No description' }}</p>
+        {% if main_scraper.tags %}
+        <div style="margin-top:8px">
+            {% for tag in main_scraper.tags.split(',') %}
+            {% if tag.strip() %}
+            <span class="scraper-card-tag">{{ tag.strip() }}</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/{{ main_scraper.id }}/edit/" class="btn btn--ghost">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Edit
+        </a>
+        <a href="/scrapers/{{ main_scraper.id }}/sub/new/" class="btn btn--primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add Sub Scraper
+        </a>
+    </div>
+</div>
+
+{% if sub_data %}
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Sub Scrapers ({{ sub_data | length }})</span>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Last Run</th>
+                    <th>Duration</th>
+                    <th>Schedule</th>
+                    <th>MongoDB</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in sub_data %}
+                <tr>
+                    <td>
+                        <a href="/scrapers/{{ main_scraper.id }}/sub/{{ item.sub.id }}/"
+                            style="color:var(--text-primary);font-weight:500">
+                            {{ item.sub.name }}
+                        </a>
+                        {% if not item.sub.is_active %}
+                        <span class="badge badge--disabled" style="margin-left:6px">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.is_running %}
+                        <span class="badge badge--running"><span class="run-dot"></span>Running</span>
+                        {% elif item.is_stale %}
+                        <span class="badge badge--stale">Stale</span>
+                        {% elif item.status == 'success' %}
+                        <span class="badge badge--success">Success</span>
+                        {% elif item.status == 'failed' %}
+                        <span class="badge badge--failed">Failed</span>
+                        {% elif item.status == 'never_run' %}
+                        <span class="badge badge--never_run">Never Run</span>
+                        {% else %}
+                        <span class="badge badge--idle">Idle</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.last_run %}
+                        <span title="{{ item.last_run.started_at }}">{{ item.last_run.started_at.strftime('%Y-%m-%d
+                            %H:%M') }}</span>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="font-mono text-sm">
+                        {% if item.last_run and item.last_run.duration_seconds %}
+                        {{ item.last_run.duration_seconds }}s
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <span class="font-mono text-sm">{{ item.schedule_summary }}</span>
+                        {% if item.schedule_enabled %}
+                        <span class="badge badge--enabled" style="margin-left:4px;font-size:10px">ON</span>
+                        {% endif %}
+                    </td>
+                    <td class="font-mono text-sm" style="color:var(--text-muted)">
+                        {{ item.sub.mongo_collection_name or '—' }}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap">
+                            {% if item.is_running %}
+                            <button class="btn btn--danger btn--sm"
+                                onclick="stopScraper({{ item.sub.id }}, {{ main_scraper.id }}, '{{ item.sub.name }}', {{ item.process.pid if item.process else 0 }})">
+                                Stop
+                            </button>
+                            {% else %}
+                            <button class="btn btn--success btn--sm" id="run-btn-{{ item.sub.id }}"
+                                onclick="runScraper({{ item.sub.id }}, {{ main_scraper.id }}, '{{ item.sub.name }}', '{{ item.sub.run_command }}')">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11"
+                                    height="11">
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                Run
+                            </button>
+                            {% endif %}
+                            <a href="/scrapers/{{ main_scraper.id }}/sub/{{ item.sub.id }}/terminal/"
+                                class="btn btn--sm" style="background:rgba(48,209,88,0.08);border:1px solid rgba(48,209,88,0.3);color:#30d158">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11">
+                                    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+                                </svg>
+                                Terminal
+                            </a>
+                            <a href="/scrapers/{{ main_scraper.id }}/sub/{{ item.sub.id }}/logs/"
+                                class="btn btn--ghost btn--sm">Logs</a>
+                            <a href="/scrapers/{{ main_scraper.id }}/sub/{{ item.sub.id }}/schedule/"
+                                class="btn btn--ghost btn--sm">Schedule</a>
+                            <a href="/scrapers/{{ main_scraper.id }}/sub/{{ item.sub.id }}/mongo/"
+                                class="btn btn--ghost btn--sm">Mongo</a>
+                        </div>
+
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
+        </svg>
+        <h3>No sub scrapers yet</h3>
+        <p>Add sub scrapers to this main scraper</p>
+        <div style="margin-top:16px">
+            <a href="/scrapers/{{ main_scraper.id }}/sub/new/" class="btn btn--primary">Add First Sub Scraper</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<meta name="csrfmiddlewaretoken" content="{{ csrf_token }}">
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}MongoDB — {{ sub.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/">{{ sub.name }}</a>
+<span class="sep">/</span>
+<span class="current">MongoDB</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">MongoDB Panel — {{ sub.name }}</h1>
+        <p class="page-subtitle">Query interface for collection data (read-only)</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/" class="btn btn--ghost btn--sm">← Back</a>
+    </div>
+</div>
+
+{% if mongo_error %}
+<div class="alert alert--error" style="margin-bottom:20px">
+    <span>{{ mongo_error }}</span>
+</div>
+{% endif %}
+
+{% if not mongo_error %}
+
+<!-- Collection Stats -->
+<div class="two-col" style="margin-bottom:16px">
+    <div class="stat-card stat-card--blue">
+        <div class="stat-label">Collection</div>
+        <div class="stat-value" style="font-size:18px;font-family:var(--font-mono)">{{ sub.mongo_collection_name }}</div>
+        <div class="text-sm text-muted font-mono">db: {{ mongo_db_display }}</div>
+    </div>
+    <div class="stat-card stat-card--green">
+        <div class="stat-label">Total Documents</div>
+        <div class="stat-value">{{ doc_count | default('—') }}</div>
+        {% if collection_stats %}
+        <div class="text-sm text-muted">~{{ (collection_stats.size / 1024 / 1024) | round(2) }} MB</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Connection info strip -->
+<div style="margin-bottom:12px;padding:8px 12px;background:var(--bg-sidebar);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;gap:8px;font-size:12px">
+    <span style="color:var(--text-muted)">Connection:</span>
+    <span class="font-mono" style="color:var(--text-secondary)">{{ mongo_uri_display }}</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="font-mono" style="color:var(--green)">{{ mongo_db_display }}</span>
+    <span style="color:var(--text-muted)">→</span>
+    <span class="font-mono" style="color:var(--primary)">{{ sub.mongo_collection_name }}</span>
+    {% if not main_scraper.mongo_uri %}
+    <span style="margin-left:auto;color:var(--text-muted)">(using global .env defaults)</span>
+    {% else %}
+    <span style="margin-left:auto;color:var(--green)">(custom per-group URI)</span>
+    {% endif %}
+</div>
+
+<!-- Quick action -->
+<div style="margin-bottom:16px">
+    <form method="post" style="display:inline">
+        <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+        <input type="hidden" name="action" value="last_inserted">
+        <button type="submit" class="btn btn--ghost btn--sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            When was last document inserted?
+        </button>
+        {% if last_inserted %}
+        <span style="margin-left:10px;font-family:var(--font-mono);color:var(--green);font-size:13px">
+            Last inserted: {{ last_inserted }}
+        </span>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Last 5 documents -->
+{% if last_docs %}
+<div class="card" style="margin-bottom:16px">
+    <div class="card-header">
+        <span class="card-title">Last 5 Documents</span>
+        <span class="text-muted text-sm">sorted by _id desc</span>
+    </div>
+    <div class="card-body">
+        <div class="json-display">{{ last_docs | tojson(indent=2) }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Query Interface -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Query Interface</span>
+        <span class="badge badge--disabled">Read-Only</span>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            <input type="hidden" name="action" value="query">
+
+            <div class="two-col">
+                <div class="form-group">
+                    <label class="form-label">Filter (JSON)</label>
+                    <textarea name="filter_query" class="form-control mono" rows="4"
+                        placeholder='{"source": "TechCrunch"}'>{{ filter_query if filter_query is defined else '{}' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Sort (JSON)</label>
+                    <textarea name="sort_query" class="form-control mono" rows="4"
+                        placeholder='{"_id": -1}'>{{ sort_query if sort_query is defined else '{"_id": -1}' }}</textarea>
+                </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label">Limit</label>
+                    <select name="limit" class="form-control" style="width:100px">
+                        {% for lim in [10, 25, 50, 100] %}
+                        <option value="{{ lim }}" {% if limit is defined and limit == lim %}selected{% endif %}>{{ lim }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div style="margin-top:20px">
+                    <button type="submit" class="btn btn--primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        Run Query
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        {% if query_error %}
+        <div class="alert alert--error">{{ query_error }}</div>
+        {% endif %}
+
+        {% if query_results %}
+        <div style="margin-top:16px">
+            <div class="section-label" style="margin-bottom:8px">Query Results</div>
+            <div class="json-display">{{ query_results }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

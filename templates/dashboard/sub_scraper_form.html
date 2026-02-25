@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/">Scrapers</a>
+{% if main_scraper %}
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+{% endif %}
+<span class="sep">/</span>
+<span class="current">{{ title }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ title }}</h1>
+        <p class="page-subtitle">Configure scraper settings</p>
+    </div>
+</div>
+
+<div class="card" style="max-width:720px">
+    <div class="card-header">
+        <span class="card-title">{{ title }}</span>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+            <div class="form-group">
+                <label class="form-label">Name <span class="required">*</span></label>
+                <input type="text" name="name" class="form-control" required value="{{ sub.name if sub else '' }}"
+                    placeholder="e.g. News Scraper">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="3"
+                    placeholder="What does this scraper do?">{{ sub.description if sub else '' }}</textarea>
+            </div>
+
+            {% if not main_scraper %}
+            <div class="form-group">
+                <label class="form-label">Name <span class="required">*</span></label>
+                <input type="text" name="name" class="form-control" required
+                    value="{{ scraper.name if scraper else '' }}">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control" value="{{ scraper.tags if scraper else '' }}"
+                    placeholder="news, finance, daily (comma-separated)">
+                <div class="form-hint">Comma-separated tags for grouping</div>
+            </div>
+            {% endif %}
+
+            {% if main_scraper %}
+            <!-- Sub scraper specific fields -->
+            <hr class="divider">
+            <div class="section-label">Execution</div>
+
+            <div class="form-group">
+                <label class="form-label">Script Path</label>
+                <input type="text" name="script_path" class="form-control mono"
+                    value="{{ sub.script_path if sub else '' }}" placeholder="/home/scrapers/news/run.py">
+                {% if errors and errors.script_path %}
+                <div class="form-error">{{ errors.script_path }}</div>
+                {% endif %}
+                <div class="form-hint">Full server path to the Python script file</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Run Command <span class="required">*</span></label>
+                <input type="text" name="run_command" class="form-control mono"
+                    value="{{ sub.run_command if sub else '' }}"
+                    placeholder="python /home/scrapers/news/run.py --mode full">
+                <div class="form-hint">The exact shell command to execute this scraper</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Log Folder Path</label>
+                <input type="text" name="log_folder_path" class="form-control mono"
+                    value="{{ sub.log_folder_path if sub else '' }}" placeholder="/home/scrapers/news/logs">
+                <div class="form-hint">Directory containing .log files for this scraper</div>
+            </div>
+
+            <hr class="divider">
+            <div class="section-label">MongoDB</div>
+
+            <!-- Inherited DB info (read-only) -->
+            <div class="form-group">
+                <label class="form-label">Database</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <input type="text" class="form-control mono"
+                        value="{{ main_scraper.get_effective_mongo_db() }}" readonly
+                        style="opacity:0.6;cursor:not-allowed;background:var(--bg-card)">
+                    <span style="font-size:12px;color:var(--text-muted);white-space:nowrap">
+                        Inherited from <a href="/scrapers/{{ main_scraper.id }}/edit/"
+                            style="color:var(--primary)">{{ main_scraper.name }}</a>
+                    </span>
+                </div>
+                <div class="form-hint">To change the database, edit the parent scraper group's MongoDB settings.</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Collection Name</label>
+                <input type="text" name="mongo_collection_name" class="form-control mono"
+                    value="{{ sub.mongo_collection_name if sub else '' }}"
+                    placeholder="e.g. bbc_articles">
+                <div class="form-hint">This sub-scraper's dedicated collection inside the <strong>{{ main_scraper.get_effective_mongo_db() }}</strong> database</div>
+            </div>
+
+            <hr class="divider">
+
+            <div class="form-group">
+                <label class="toggle-switch">
+                    <input type="checkbox" name="is_active" {% if not sub or sub.is_active %}checked{% endif %}>
+                    <span class="toggle-track"></span>
+                    <span>Active — include in scheduling and monitoring</span>
+                </label>
+            </div>
+            {% else %}
+            <!-- Main scraper fields -->
+            <div class="form-group">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control" value="{{ scraper.tags if scraper else '' }}"
+                    placeholder="news, finance, daily">
+                <div class="form-hint">Comma-separated tags</div>
+            </div>
+            {% endif %}
+
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button type="submit" class="btn btn--primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Save Changes
+                </button>
+                <button type="button" class="btn btn--ghost" onclick="history.back()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

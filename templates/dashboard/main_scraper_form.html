@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/">Scrapers</a>
+<span class="sep">/</span>
+<span class="current">{{ title }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ title }}</h1>
+    </div>
+</div>
+
+<div class="card" style="max-width:640px">
+    <div class="card-header">
+        <span class="card-title">Main Scraper Details</span>
+    </div>
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+            <div class="form-group">
+                <label class="form-label">Name <span class="required">*</span></label>
+                <input type="text" name="name" class="form-control" required
+                    value="{{ scraper.name if scraper else '' }}" placeholder="e.g. News Site Scrapers">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="3"
+                    placeholder="What scrapers are grouped here?">{{ scraper.description if scraper else '' }}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Tags</label>
+                <input type="text" name="tags" class="form-control" value="{{ scraper.tags if scraper else '' }}"
+                    placeholder="news, finance, daily (comma-separated)">
+                <div class="form-hint">Comma-separated tags for organisation</div>
+            </div>
+
+            <hr class="divider">
+            <div class="section-label">MongoDB Connection</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+                Each scraper group can connect to its own MongoDB instance &amp; database.
+                Leave blank to use the global defaults from <code>.env</code>
+                (<span class="font-mono" style="font-size:11px;color:var(--text-secondary)">{{ default_mongo_db }}</span>).
+            </p>
+
+            <div class="form-group">
+                <label class="form-label">MongoDB URI</label>
+                <input type="text" name="mongo_uri" class="form-control mono"
+                    value="{{ scraper.mongo_uri if scraper and scraper.mongo_uri else '' }}"
+                    placeholder="{{ default_mongo_uri }}">
+                <div class="form-hint">e.g. <code>mongodb://user:pass@host:27017/</code> — leave blank for global default</div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Database Name</label>
+                <input type="text" name="mongo_db_name" class="form-control mono"
+                    value="{{ scraper.mongo_db_name if scraper and scraper.mongo_db_name else '' }}"
+                    placeholder="{{ default_mongo_db }}">
+                <div class="form-hint">The MongoDB database that all sub-scrapers in this group will use</div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-top:16px">
+                <button type="submit" class="btn btn--primary">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                        <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Save
+                </button>
+                <button type="button" class="btn btn--ghost" onclick="history.back()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

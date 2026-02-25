@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Process Watcher{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<span class="current">Process Watcher</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Process Watcher</h1>
+        <p class="page-subtitle">Mission control — all scrapers in one view</p>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn--ghost btn--sm" onclick="manualRefresh()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            Refresh
+        </button>
+    </div>
+</div>
+
+<div class="auto-refresh-bar">
+    <span class="status-dot status-dot--green"></span>
+    <span>Auto-refreshing every 10 seconds</span>
+    <div class="refresh-progress">
+        <div class="refresh-bar-inner" id="watcher-progress"></div>
+    </div>
+    <span id="watcher-countdown" style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)"></span>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">All Active Scrapers</span>
+        <span id="watcher-summary" class="text-muted text-sm">{{ watcher_data | length }} scrapers</span>
+    </div>
+    <div class="table-wrapper" id="watcher-table">
+        {% include "dashboard/_watcher_table.html" %}
+    </div>
+</div>
+
+<meta name="csrfmiddlewaretoken" content="{{ csrf_token }}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let watcherCountdown = 10;
+
+function updateWatcherCountdown() {
+    watcherCountdown--;
+    document.getElementById('watcher-countdown').textContent = `${watcherCountdown}s`;
+    if (watcherCountdown <= 0) {
+        watcherCountdown = 10;
+        fetchWatcherData();
+    }
+}
+
+async function fetchWatcherData() {
+    try {
+        const res = await fetch('/api/watcher-data/');
+        const data = await res.json();
+        updateWatcherUI(data.scrapers);
+    } catch(e) {
+        console.error('Watcher refresh failed:', e);
+    }
+}
+
+function updateWatcherUI(scrapers) {
+    const tbody = document.querySelector('#watcher-table tbody');
+    if (!tbody) return;
+
+    tbody.innerHTML = scrapers.map(s => {
+        const statusBadge = s.is_running
+            ? `<span class="badge badge--running"><span class="run-dot"></span>Running</span>`
+            : s.status === 'success' ? `<span class="badge badge--success">Success</span>`
+            : s.status === 'failed' ? `<span class="badge badge--failed">Failed</span>`
+            : `<span class="badge badge--never_run">Never Run</span>`;
+
+        const lastRun = s.last_run_at
+            ? new Date(s.last_run_at).toLocaleString()
+            : '—';
+
+        const nextRun = s.next_run
+            ? new Date(s.next_run).toLocaleString()
+            : '—';
+
+        const actions = s.is_running
+            ? `<button class="btn btn--danger btn--sm" onclick="stopScraper(${s.sub_id}, ${s.main_scraper_id}, '${s.name.replace(/'/g, "\\'")}', ${s.pid || 0})">Stop</button>`
+            : `<button class="btn btn--success btn--sm" onclick="runScraper(${s.sub_id}, ${s.main_scraper_id}, '${s.name.replace(/'/g, "\\'")}', '')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run</button>`;
+
+        return `<tr>
+            <td><a href="/scrapers/${s.main_scraper_id}/sub/${s.sub_id}/" style="color:var(--text-primary);font-weight:500">${s.name}</a></td>
+            <td><a href="/scrapers/${s.main_scraper_id}/" style="color:var(--text-secondary)">${s.main_scraper}</a></td>
+            <td>${statusBadge}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">${lastRun}</td>
+            <td style="font-family:var(--font-mono);font-size:12px">${nextRun}</td>
+            <td>${actions}</td>
+        </tr>`;
+    }).join('');
+
+    document.getElementById('watcher-summary').textContent = `${scrapers.length} scrapers`;
+}
+
+function manualRefresh() {
+    watcherCountdown = 10;
+    fetchWatcherData();
+}
+
+// Reset animation when refreshing
+function restartAnimation() {
+    const bar = document.getElementById('watcher-progress');
+    if (bar) {
+        bar.style.animation = 'none';
+        setTimeout(() => { bar.style.animation = ''; }, 10);
+    }
+}
+
+setInterval(updateWatcherCountdown, 1000);
+setTimeout(() => {
+    fetchWatcherData();
+}, 2000);
+</script>
+{% endblock %}

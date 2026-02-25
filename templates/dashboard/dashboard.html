@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block breadcrumb %}
+<span class="current">Dashboard</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Scraper Dashboard</h1>
+        <p class="page-subtitle">Monitor and control all your web scrapers</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/new/" class="btn btn--primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New Scraper
+        </a>
+        <a href="/watcher/" class="btn btn--ghost">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+            </svg>
+            Watcher
+        </a>
+    </div>
+</div>
+
+<!-- Summary Bar -->
+<div class="stats-bar">
+    <div class="stat-card stat-card--blue">
+        <div class="stat-label">Total Scrapers</div>
+        <div class="stat-value">{{ total_scrapers }}</div>
+    </div>
+    <div class="stat-card stat-card--green">
+        <div class="stat-label">Currently Running</div>
+        <div class="stat-value">{{ currently_running }}</div>
+    </div>
+    <div class="stat-card stat-card--red">
+        <div class="stat-label">Failed Last Run</div>
+        <div class="stat-value">{{ failed_last_run }}</div>
+    </div>
+    <div class="stat-card stat-card--yellow">
+        <div class="stat-label">Stale (24h+)</div>
+        <div class="stat-value">{{ stale_count }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Main Groups</div>
+        <div class="stat-value">{{ main_scrapers | length }}</div>
+    </div>
+</div>
+
+<!-- Scraper Cards -->
+{% if main_scrapers %}
+<div class="scraper-grid">
+    {% for ms in main_scrapers %}
+    <a href="/scrapers/{{ ms.id }}/" style="text-decoration:none">
+        <div class="scraper-card scraper-card--{{ ms.health_status }}">
+            <div class="scraper-card-name">{{ ms.name }}</div>
+            <div class="scraper-card-desc">{{ ms.description | truncate(80) if ms.description else 'No description' }}
+            </div>
+
+            {% if ms.tags %}
+            <div class="mb-4">
+                {% for tag in ms.tags.split(',') %}
+                {% if tag.strip() %}
+                <span class="scraper-card-tag">{{ tag.strip() }}</span>
+                {% endif %}
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="scraper-card-meta">
+                <div style="display:flex;align-items:center;gap:8px">
+                    <span style="display:flex;align-items:center;gap:4px">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13"
+                            height="13">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                            <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
+                        </svg>
+                        {{ ms.sub_scrapers_count }} sub-scrapers
+                    </span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px">
+                    <span
+                        class="status-dot status-dot--{{ ms.health_status if ms.health_status in ['green', 'red', 'yellow'] else 'gray' }}"></span>
+                    <span style="text-transform:capitalize">{{ ms.health_status }}</span>
+                </div>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+            <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
+        </svg>
+        <h3>No scrapers configured yet</h3>
+        <p>Create your first main scraper to get started</p>
+        <div style="margin-top:16px">
+            <a href="/scrapers/new/" class="btn btn--primary">Create First Scraper</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}All Scrapers{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<span class="current">All Scrapers</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">All Scrapers</h1>
+        <p class="page-subtitle">All main scraper groups</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/new/" class="btn btn--primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Scraper Group
+        </a>
+    </div>
+</div>
+
+{% if main_scrapers %}
+<div class="card">
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Sub Scrapers</th>
+                    <th>Health</th>
+                    <th>Tags</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ms in main_scrapers %}
+                <tr>
+                    <td>
+                        <a href="/scrapers/{{ ms.id }}/" style="color:var(--text-primary);font-weight:500">{{ ms.name }}</a>
+                        {% if ms.description %}
+                        <br><span style="font-size:12px;color:var(--text-muted)">{{ ms.description[:60] }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ ms.sub_scrapers_count }}</td>
+                    <td>
+                        <span class="status-dot status-dot--{{ ms.health_status if ms.health_status in ['green', 'red', 'yellow'] else 'gray' }}"></span>
+                        <span style="margin-left:6px;text-transform:capitalize;color:var(--text-secondary)">{{ ms.health_status }}</span>
+                    </td>
+                    <td>
+                        {% if ms.tags %}
+                        {% for tag in ms.tags.split(',')[:3] %}
+                        {% if tag.strip() %}
+                        <span class="scraper-card-tag">{{ tag.strip() }}</span>
+                        {% endif %}
+                        {% endfor %}
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                    <td class="font-mono text-sm text-muted">{{ ms.created_at.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        <div style="display:flex;gap:4px">
+                            <a href="/scrapers/{{ ms.id }}/" class="btn btn--ghost btn--sm">View</a>
+                            <a href="/scrapers/{{ ms.id }}/edit/" class="btn btn--ghost btn--sm">Edit</a>
+                            <a href="/scrapers/{{ ms.id }}/sub/new/" class="btn btn--primary btn--sm">+ Sub</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><circle cx="12" cy="12" r="3"/></svg>
+        <h3>No scraper groups yet</h3>
+        <p>Create your first scraper group to get started</p>
+        <div style="margin-top:16px">
+            <a href="/scrapers/new/" class="btn btn--primary">Create First Group</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

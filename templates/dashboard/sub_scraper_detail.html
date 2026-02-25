@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}{{ sub.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<span class="current">{{ sub.name }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">{{ sub.name }}</h1>
+        <p class="page-subtitle">{{ sub.description or 'No description' }}</p>
+    </div>
+    <div class="page-actions">
+        {% if is_running %}
+        <button class="btn btn--danger"
+            onclick="stopScraper({{ sub.id }}, {{ main_scraper.id }}, '{{ sub.name }}', {{ process.pid if process else 0 }})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+            </svg>
+            Stop
+        </button>
+        {% else %}
+        <button class="btn btn--success" id="run-btn-{{ sub.id }}"
+            onclick="runScraper({{ sub.id }}, {{ main_scraper.id }}, '{{ sub.name }}', '{{ sub.run_command }}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Run Now
+        </button>
+        {% endif %}
+        <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/edit/" class="btn btn--ghost">Edit Config</a>
+    </div>
+</div>
+
+<div class="two-col">
+    <!-- Status Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Current Status</span>
+            {% if is_running %}
+            <span class="badge badge--running"><span class="run-dot"></span>Running</span>
+            {% elif last_run %}
+            <span class="badge badge--{{ last_run.status }}">{{ last_run.status | title }}</span>
+            {% else %}
+            <span class="badge badge--never_run">Never Run</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if is_running and process %}
+            <div class="info-row">
+                <span class="info-label">Process PID</span>
+                <span class="info-val">{{ process.pid }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Started At</span>
+                <span class="info-val">{{ process.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+            {% endif %}
+            {% if last_run %}
+            <div class="info-row">
+                <span class="info-label">Last Run</span>
+                <span class="info-val">{{ last_run.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Duration</span>
+                <span class="info-val">{{ last_run.duration_seconds ~ 's' if last_run.duration_seconds else '—'
+                    }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Triggered By</span>
+                <span class="info-val">{{ last_run.triggered_by | title }}</span>
+            </div>
+            {% if last_run.notes %}
+            <div class="info-row">
+                <span class="info-label">Notes</span>
+                <span class="info-val" style="max-width:300px;overflow:hidden;text-overflow:ellipsis">{{
+                    last_run.notes[:100] }}</span>
+            </div>
+            {% endif %}
+            {% else %}
+            <p class="text-muted">No run history yet</p>
+            {% endif %}
+        </div>
+        <div class="card-footer">
+            <div style="display:flex;gap:8px">
+                <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/history/" class="btn btn--ghost btn--sm">Run
+                    History</a>
+                <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/logs/" class="btn btn--ghost btn--sm">View
+                    Logs</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Config Card -->
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Configuration</span>
+            <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/edit/" class="btn btn--ghost btn--sm">Edit</a>
+        </div>
+        <div class="card-body">
+            <div class="info-row">
+                <span class="info-label">Run Command</span>
+                <span class="info-val">{{ sub.run_command or '—' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Script Path</span>
+                <span class="info-val">{{ sub.script_path or '—' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Log Folder</span>
+                <span class="info-val">{{ sub.log_folder_path or '—' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">MongoDB DB</span>
+                <span class="info-val">{{ sub.mongo_db_name or '—' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Collection</span>
+                <span class="info-val">{{ sub.mongo_collection_name or '—' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Active</span>
+                <span class="info-val">
+                    {% if sub.is_active %}
+                    <span class="badge badge--enabled">Yes</span>
+                    {% else %}
+                    <span class="badge badge--disabled">No</span>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule Card -->
+<div class="card" style="margin-top:16px">
+    <div class="card-header">
+        <span class="card-title">Schedule</span>
+        <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/schedule/"
+            class="btn btn--ghost btn--sm">Configure</a>
+    </div>
+    <div class="card-body">
+        {% if schedule %}
+        <div class="info-row">
+            <span class="info-label">Cron Expression</span>
+            <span class="info-val font-mono">{{ schedule.cron_string }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Status</span>
+            <span class="info-val">
+                {% if schedule.is_enabled %}
+                <span class="badge badge--enabled">Enabled</span>
+                {% else %}
+                <span class="badge badge--disabled">Disabled</span>
+                {% endif %}
+            </span>
+        </div>
+        {% if next_runs %}
+        <div style="margin-top:12px">
+            <div class="section-label">Next Scheduled Runs</div>
+            <div class="next-runs">
+                {% for run in next_runs %}
+                <div class="next-run-item">
+                    <div class="nr-idx">{{ loop.index }}</div>
+                    <div class="nr-time">{{ run.strftime('%A, %b %d %Y at %H:%M') }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% else %}
+        <p class="text-muted">No schedule configured. <a
+                href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/schedule/">Set up schedule →</a></p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Navigator -->
+<div style="display:flex;gap:12px;margin-top:16px;flex-wrap:wrap">
+    <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/logs/" class="card"
+        style="padding:16px;flex:1;min-width:160px;text-decoration:none;display:flex;align-items:center;gap:12px;transition:border-color 150ms">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="22" height="22">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+        </svg>
+        <div>
+            <div style="font-weight:600;color:var(--text-primary)">Live Logs</div>
+            <div style="font-size:12px;color:var(--text-muted)">View & tail log files</div>
+        </div>
+    </a>
+    <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/history/" class="card"
+        style="padding:16px;flex:1;min-width:160px;text-decoration:none;display:flex;align-items:center;gap:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="22" height="22">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        </svg>
+        <div>
+            <div style="font-weight:600;color:var(--text-primary)">Run History</div>
+            <div style="font-size:12px;color:var(--text-muted)">Past runs & stats</div>
+        </div>
+    </a>
+    <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/mongo/" class="card"
+        style="padding:16px;flex:1;min-width:160px;text-decoration:none;display:flex;align-items:center;gap:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="22" height="22">
+            <ellipse cx="12" cy="5" rx="9" ry="3" />
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+        </svg>
+        <div>
+            <div style="font-weight:600;color:var(--text-primary)">MongoDB Panel</div>
+            <div style="font-size:12px;color:var(--text-muted)">Query collection data</div>
+        </div>
+    </a>
+    <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/schedule/" class="card"
+        style="padding:16px;flex:1;min-width:160px;text-decoration:none;display:flex;align-items:center;gap:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" width="22" height="22">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+        <div>
+            <div style="font-weight:600;color:var(--text-primary)">Schedule</div>
+            <div style="font-size:12px;color:var(--text-muted)">Cron scheduling</div>
+        </div>
+    </a>
+</div>
+
+<meta name="csrfmiddlewaretoken" content="{{ csrf_token }}">
+{% endblock %}

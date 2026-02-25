@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Run History — {{ sub.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/">{{ sub.name }}</a>
+<span class="sep">/</span>
+<span class="current">History</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Run History — {{ sub.name }}</h1>
+        <p class="page-subtitle">All past executions for this scraper</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/{{ main_scraper.id }}/sub/{{ sub.id }}/" class="btn btn--ghost btn--sm">← Back</a>
+    </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar" style="margin-bottom:20px">
+    <div class="stat-card stat-card--blue">
+        <div class="stat-label">Total Runs</div>
+        <div class="stat-value">{{ total_runs }}</div>
+    </div>
+    <div class="stat-card stat-card--green">
+        <div class="stat-label">Success Rate</div>
+        <div class="stat-value">{{ success_rate }}%</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Avg Duration</div>
+        <div class="stat-value" style="font-size:18px">{{ avg_duration ~ 's' if avg_duration else '—' }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Last Success</div>
+        <div class="stat-value" style="font-size:14px">
+            {% if last_success %}
+            {{ last_success.started_at.strftime('%b %d %H:%M') }}
+            {% else %}—{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Execution Log</span>
+        <span class="text-muted text-sm">{{ total_runs }} total runs</span>
+    </div>
+    {% if page_obj.object_list %}
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Status</th>
+                    <th>Triggered By</th>
+                    <th>Started At</th>
+                    <th>Ended At</th>
+                    <th>Duration</th>
+                    <th>Records</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for run in page_obj.object_list %}
+                <tr>
+                    <td class="font-mono text-sm text-muted">{{ run.id }}</td>
+                    <td>
+                        <span class="badge badge--{{ run.status }}">{{ run.status | title }}</span>
+                    </td>
+                    <td>
+                        <span class="badge badge--{{ run.triggered_by }}">{{ run.triggered_by | title }}</span>
+                    </td>
+                    <td class="font-mono text-sm">{{ run.started_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td class="font-mono text-sm">
+                        {{ run.ended_at.strftime('%Y-%m-%d %H:%M:%S') if run.ended_at else '—' }}
+                    </td>
+                    <td class="font-mono text-sm">
+                        {{ run.duration_seconds ~ 's' if run.duration_seconds else '—' }}
+                    </td>
+                    <td class="font-mono text-sm">
+                        {{ run.records_inserted if run.records_inserted is not none else '—' }}
+                    </td>
+                    <td style="max-width:300px">
+                        {% if run.notes %}
+                        <span title="{{ run.notes }}" style="cursor:help;color:var(--text-muted);font-size:12px">
+                            {{ run.notes[:60] ~ '...' if run.notes | length > 60 else run.notes }}
+                        </span>
+                        {% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if page_obj.has_other_pages() %}
+    <div class="card-footer">
+        <div class="pagination">
+            {% if page_obj.has_previous() %}
+            <a href="?page={{ page_obj.previous_page_number() }}" class="page-link">← Prev</a>
+            {% endif %}
+
+            {% for num in page_obj.paginator.page_range %}
+            {% if num == page_obj.number %}
+            <span class="page-link active">{{ num }}</span>
+            {% elif num >= page_obj.number - 2 and num <= page_obj.number + 2 %}
+            <a href="?page={{ num }}" class="page-link">{{ num }}</a>
+            {% endif %}
+            {% endfor %}
+
+            {% if page_obj.has_next() %}
+            <a href="?page={{ page_obj.next_page_number() }}" class="page-link">Next →</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="empty-state">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <h3>No run history yet</h3>
+        <p>This scraper hasn't been run yet</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
