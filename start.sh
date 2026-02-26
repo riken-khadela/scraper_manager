@@ -195,7 +195,7 @@ mkdir -p "$LOG_DIR"
 
 # Django dev server
 info "Starting Django development server..."
-"$PYTHON" "$BASE_DIR/manage.py" runserver 0.0.0.0:8000 \
+"$PYTHON" "$BASE_DIR/manage.py" runserver 0.0.0.0:1109 \
     > "$LOG_DIR/django.log" 2>&1 &
 DJANGO_PID=$!
 success "Django server    →  PID $DJANGO_PID  |  log: logs/django.log"
