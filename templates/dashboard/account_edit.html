@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Account — {{ account.email }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/">Scrapers</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/accounts/">Accounts</a>
+<span class="sep">/</span>
+<span class="current">Edit {{ account.email }}</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Edit Account</h1>
+        <p class="page-subtitle">{{ account.email }}</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/{{ main_scraper.id }}/accounts/" class="btn btn--ghost">← Back to Accounts</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">Account Details</span>
+    </div>
+    <div class="card-body" style="padding:20px">
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-control" value="{{ account.email }}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Password</label>
+                <input type="text" name="password" class="form-control" placeholder="Leave blank to keep current password" value="">
+                <span class="form-hint">Current password is set. Enter a new one to change it.</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea name="notes" class="form-control" rows="3" placeholder="Optional notes about this account">{{ account.notes }}</textarea>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:20px">
+                <button type="submit" class="btn btn--primary">Save Changes</button>
+                <a href="/scrapers/{{ main_scraper.id }}/accounts/" class="btn btn--ghost">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

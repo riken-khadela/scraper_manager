@@ -21,6 +21,14 @@ urlpatterns = [
     path('scrapers/<int:pk>/sub/<int:sub_id>/stop/', views.stop_scraper, name='stop_scraper'),
     path('watcher/', views.watcher, name='watcher'),
 
+    # ── Account Management & Control Panel ────────────────────────────────
+    path('scrapers/<int:pk>/accounts/', views.account_management, name='account_management'),
+    path('scrapers/<int:pk>/accounts/<int:account_id>/toggle/', views.account_toggle, name='account_toggle'),
+    path('scrapers/<int:pk>/accounts/<int:account_id>/edit/', views.account_edit, name='account_edit'),
+    path('scrapers/<int:pk>/control-panel/', views.control_panel, name='control_panel'),
+    path('scrapers/<int:pk>/control-panel/config/', views.update_config, name='update_config'),
+    path('scrapers/<int:pk>/control-panel/run/', views.run_with_config, name='run_with_config'),
+
     # Existing API endpoints
     path('api/logs/', api_views.api_log_tail, name='api_log_tail'),
     path('api/status/<int:sub_id>/', api_views.api_status, name='api_status'),
@@ -30,3 +38,4 @@ urlpatterns = [
     path('api/live-log/<int:sub_id>/', api_views.api_live_log, name='api_live_log'),
     path('api/send-input/<int:sub_id>/', api_views.api_send_input, name='api_send_input'),
 ]
+

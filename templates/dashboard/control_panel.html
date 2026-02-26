@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Control Panel — {{ main_scraper.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/">Scrapers</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<span class="current">Control Panel</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Control Panel</h1>
+        <p class="page-subtitle">{{ main_scraper.name }} — {{ active_count }}/{{ total_count }} accounts active</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/{{ main_scraper.id }}/accounts/" class="btn btn--ghost">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            Manage Accounts
+        </a>
+        <a href="/scrapers/{{ main_scraper.id }}/" class="btn btn--ghost">← Back</a>
+    </div>
+</div>
+
+<!-- ── Stats Row ──────────────────────────────────────────────── -->
+<div class="stats-row">
+    <div class="stat-card">
+        <span class="stat-label">Active Accounts</span>
+        <span class="stat-value" style="color:var(--green)">{{ active_count }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Update Threads</span>
+        <span class="stat-value" style="color:var(--accent)">{{ distribution.update }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">New Threads</span>
+        <span class="stat-value" style="color:var(--yellow)">{{ distribution.new }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Ratio</span>
+        <span class="stat-value font-mono" style="font-size:20px">{{ config.update_ratio }}</span>
+    </div>
+</div>
+
+<!-- ── Run Buttons ────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+        <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align:middle;margin-right:6px">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Launch Scrapers
+        </span>
+    </div>
+    <div class="card-body" style="padding:20px">
+        {% if active_count == 0 %}
+        <div style="text-align:center;padding:20px;color:var(--text-muted)">
+            <p>No active accounts. <a href="/scrapers/{{ main_scraper.id }}/accounts/" style="color:var(--accent)">Activate accounts</a> first.</p>
+        </div>
+        {% else %}
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+            {% for item in sub_data %}
+            <div style="flex:1;min-width:280px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                    <span style="font-weight:600;color:var(--text-primary)">{{ item.sub.name }}</span>
+                    {% if item.is_running %}
+                    <span class="badge badge--running"><span class="run-dot"></span>Running</span>
+                    {% elif item.status == 'success' %}
+                    <span class="badge badge--success">Success</span>
+                    {% elif item.status == 'failed' %}
+                    <span class="badge badge--failed">Failed</span>
+                    {% else %}
+                    <span class="badge badge--idle">Idle</span>
+                    {% endif %}
+                </div>
+                {% if item.last_run %}
+                <div class="text-sm" style="color:var(--text-muted);margin-bottom:12px">
+                    Last run: {{ item.last_run.started_at|date:"Y-m-d H:i" }}
+                    {% if item.last_run.duration_seconds %} ({{ item.last_run.duration_seconds }}s){% endif %}
+                </div>
+                {% endif %}
+
+                {% if item.is_running %}
+                <div style="display:flex;gap:8px">
+                    <button class="btn btn--danger btn--sm" onclick="stopScraper({{ item.sub.id }}, {{ main_scraper.id }})">
+                        Stop
+                    </button>
+                    <a href="/scrapers/{{ main_scraper.id }}/sub/{{ item.sub.id }}/terminal/"
+                       class="btn btn--sm" style="background:rgba(48,209,88,0.08);border:1px solid rgba(48,209,88,0.3);color:#30d158">
+                        Terminal
+                    </a>
+                </div>
+                {% else %}
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="btn btn--success btn--sm"
+                            onclick="runWithConfig({{ main_scraper.id }}, {{ item.sub.id }}, 'all')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Run All
+                    </button>
+                    <button class="btn btn--sm" style="background:rgba(94,92,230,0.1);border:1px solid rgba(94,92,230,0.3);color:#5e5ce6"
+                            onclick="runWithConfig({{ main_scraper.id }}, {{ item.sub.id }}, 'update_only')">
+                        Update Only
+                    </button>
+                    <button class="btn btn--sm" style="background:rgba(255,214,10,0.1);border:1px solid rgba(255,214,10,0.3);color:#ffd60a"
+                            onclick="runWithConfig({{ main_scraper.id }}, {{ item.sub.id }}, 'new_only')">
+                        New Only
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div style="text-align:center;padding:20px;color:var(--text-muted);width:100%">
+                <p>No sub-scrapers configured. <a href="/scrapers/{{ main_scraper.id }}/sub/new/" style="color:var(--accent)">Create sub-scrapers</a> first.</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Configuration ──────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:20px">
+    <div class="card-header">
+        <span class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="vertical-align:middle;margin-right:6px">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+            Configuration
+        </span>
+    </div>
+    <div class="card-body" style="padding:20px">
+        <form method="post" action="/scrapers/{{ main_scraper.id }}/control-panel/config/">
+            {% csrf_token %}
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+                <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px">
+                    <h3 style="font-size:14px;font-weight:600;color:var(--accent);margin-bottom:12px">Account Distribution</h3>
+                    <div class="form-group">
+                        <label class="form-label">Update Account Count <span style="color:var(--text-muted);font-weight:400">(0 = auto from ratio)</span></label>
+                        <input type="number" name="update_account_count" class="form-control" value="{{ config.update_account_count }}" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">New Account Count <span style="color:var(--text-muted);font-weight:400">(0 = auto from ratio)</span></label>
+                        <input type="number" name="new_account_count" class="form-control" value="{{ config.new_account_count }}" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Update Ratio <span style="color:var(--text-muted);font-weight:400">(used when counts are 0)</span></label>
+                        <input type="number" name="update_ratio" class="form-control" value="{{ config.update_ratio }}" min="0" max="1" step="0.05">
+                    </div>
+                </div>
+
+                <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px">
+                    <h3 style="font-size:14px;font-weight:600;color:var(--yellow);margin-bottom:12px">Batch Settings</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Batch Size (New)</label>
+                            <input type="number" name="batch_size_new" class="form-control" value="{{ config.batch_size_new }}" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Batch Size (Update)</label>
+                            <input type="number" name="batch_size_update" class="form-control" value="{{ config.batch_size_update }}" min="1">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Max Batches (New)</label>
+                            <input type="number" name="max_batches_new" class="form-control" value="{{ config.max_batches_new }}" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Batches (Update)</label>
+                            <input type="number" name="max_batches_update" class="form-control" value="{{ config.max_batches_update }}" min="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-bottom:20px">
+                <h3 style="font-size:14px;font-weight:600;color:var(--green);margin-bottom:12px">Paths</h3>
+                <div class="form-group">
+                    <label class="form-label">Script Base Path <span style="color:var(--text-muted);font-weight:400">(leave blank for default)</span></label>
+                    <input type="text" name="script_base_path" class="form-control mono" value="{{ config.script_base_path }}" placeholder="/home/rk/workspace/workspace/scraper_manager/crunchbase">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Log Base Path <span style="color:var(--text-muted);font-weight:400">(leave blank for default)</span></label>
+                    <input type="text" name="log_base_path" class="form-control mono" value="{{ config.log_base_path }}" placeholder="/tmp/scraper_logs">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn--primary">
+                Save Configuration
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- ── Account Preview ────────────────────────────────────────── -->
+<div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span class="card-title">Active Accounts Preview</span>
+        <a href="/scrapers/{{ main_scraper.id }}/accounts/" class="btn btn--ghost btn--sm">Manage All →</a>
+    </div>
+    <div class="card-body" style="padding:16px">
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+            {% for acc in accounts %}
+            {% if acc.is_active %}
+            <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:12px;font-family:var(--font-mono)">
+                <span style="color:var(--green);margin-right:4px">●</span>
+                {{ acc.email }}
+                {% if acc.status != 'idle' %}
+                <span class="badge badge--running" style="margin-left:6px;padding:2px 6px;font-size:10px">
+                    {{ acc.get_status_display }}
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% if active_count == 0 %}
+        <div style="text-align:center;padding:20px;color:var(--text-muted)">
+            No active accounts. <a href="/scrapers/{{ main_scraper.id }}/accounts/" style="color:var(--accent)">Activate some</a>.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<meta name="csrfmiddlewaretoken" content="{{ csrf_token }}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function runWithConfig(scraperId, subId, mode) {
+    const csrfToken = document.querySelector('meta[name="csrfmiddlewaretoken"]').content;
+    const modeLabels = {'all': 'Run All (Update + New)', 'update_only': 'Update Only', 'new_only': 'New Only'};
+
+    if (!confirm(`Start scraper in "${modeLabels[mode]}" mode?`)) return;
+
+    const formData = new FormData();
+    formData.append('mode', mode);
+    formData.append('sub_id', subId);
+
+    fetch(`/scrapers/${scraperId}/control-panel/run/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken},
+        body: formData,
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            alert(`✓ ${data.message}\n\nUpdate accounts: ${data.config.update_accounts}\nNew accounts: ${data.config.new_accounts}`);
+            location.reload();
+        } else {
+            alert(`✗ Error: ${data.message}`);
+        }
+    })
+    .catch(err => {
+        alert('Network error: ' + err.message);
+    });
+}
+
+function stopScraper(subId, scraperId) {
+    if (!confirm('Stop this scraper?')) return;
+    const csrfToken = document.querySelector('meta[name="csrfmiddlewaretoken"]').content;
+    fetch(`/scrapers/${scraperId}/sub/${subId}/stop/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken},
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    });
+}
+</script>
+{% endblock %}

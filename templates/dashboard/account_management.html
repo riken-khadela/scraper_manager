@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Accounts — {{ main_scraper.name }}{% endblock %}
+
+{% block breadcrumb %}
+<a href="/">Dashboard</a>
+<span class="sep">/</span>
+<a href="/scrapers/">Scrapers</a>
+<span class="sep">/</span>
+<a href="/scrapers/{{ main_scraper.id }}/">{{ main_scraper.name }}</a>
+<span class="sep">/</span>
+<span class="current">Accounts</span>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Account Management</h1>
+        <p class="page-subtitle">{{ main_scraper.name }} — {{ total_count }} accounts ({{ active_count }} active)</p>
+    </div>
+    <div class="page-actions">
+        <a href="/scrapers/{{ main_scraper.id }}/control-panel/" class="btn btn--primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/>
+            </svg>
+            Control Panel
+        </a>
+        <a href="/scrapers/{{ main_scraper.id }}/" class="btn btn--ghost">← Back</a>
+    </div>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-row">
+    <div class="stat-card">
+        <span class="stat-label">Total Accounts</span>
+        <span class="stat-value">{{ total_count }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Active</span>
+        <span class="stat-value" style="color:var(--green)">{{ active_count }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Inactive</span>
+        <span class="stat-value" style="color:var(--red)">{{ total_count|add:"-"|add:active_count }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">Update Threads</span>
+        <span class="stat-value" style="color:var(--accent)">{{ distribution.update }}</span>
+    </div>
+    <div class="stat-card">
+        <span class="stat-label">New Threads</span>
+        <span class="stat-value" style="color:var(--yellow)">{{ distribution.new }}</span>
+    </div>
+</div>
+
+<!-- Bulk Actions + Add Account -->
+<div class="card" style="margin-bottom:20px">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <span class="card-title">Quick Actions</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <form method="post" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="bulk_toggle">
+                <input type="hidden" name="state" value="on">
+                <button type="submit" class="btn btn--success btn--sm">Activate All</button>
+            </form>
+            <form method="post" style="display:inline">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="bulk_toggle">
+                <input type="hidden" name="state" value="off">
+                <button type="submit" class="btn btn--danger btn--sm">Deactivate All</button>
+            </form>
+        </div>
+    </div>
+    <div class="card-body" style="padding:16px">
+        <form method="post" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_account">
+            <div class="form-group" style="flex:1;min-width:200px;margin:0">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-control" placeholder="account@example.com" required>
+            </div>
+            <div class="form-group" style="flex:1;min-width:200px;margin:0">
+                <label class="form-label">Password</label>
+                <input type="text" name="password" class="form-control" placeholder="Password" required>
+            </div>
+            <button type="submit" class="btn btn--primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                Add Account
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Accounts Table -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-title">All Accounts</span>
+    </div>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:40px">#</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Active</th>
+                    <th>Last Used</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for acc in accounts %}
+                <tr id="account-row-{{ acc.id }}" style="{% if not acc.is_active %}opacity:0.5{% endif %}">
+                    <td class="font-mono text-sm" style="color:var(--text-muted)">{{ forloop.counter }}</td>
+                    <td>
+                        <span class="font-mono text-sm" style="color:var(--text-primary);font-weight:500">{{ acc.email }}</span>
+                    </td>
+                    <td>
+                        {% if acc.status == 'running_update' %}
+                        <span class="badge badge--running"><span class="run-dot"></span>Update</span>
+                        {% elif acc.status == 'running_new' %}
+                        <span class="badge badge--running"><span class="run-dot"></span>New</span>
+                        {% elif acc.status == 'error' %}
+                        <span class="badge badge--failed">Error</span>
+                        {% else %}
+                        <span class="badge badge--idle">Idle</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <label class="toggle-switch" style="cursor:pointer">
+                            <input type="checkbox" {% if acc.is_active %}checked{% endif %}
+                                   onchange="toggleAccount({{ main_scraper.id }}, {{ acc.id }}, this)"
+                                   style="display:none">
+                            <span class="toggle-track" style="
+                                display:inline-block;width:36px;height:20px;border-radius:10px;position:relative;
+                                background:{% if acc.is_active %}var(--green){% else %}var(--border){% endif %};
+                                transition:background 0.2s;cursor:pointer;
+                            ">
+                                <span class="toggle-thumb" style="
+                                    display:block;width:16px;height:16px;border-radius:50%;
+                                    background:#fff;position:absolute;top:2px;
+                                    left:{% if acc.is_active %}18px{% else %}2px{% endif %};
+                                    transition:left 0.2s;
+                                "></span>
+                            </span>
+                        </label>
+                    </td>
+                    <td class="text-sm" style="color:var(--text-muted)">
+                        {% if acc.last_used_at %}
+                        {{ acc.last_used_at|date:"Y-m-d H:i" }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td class="text-sm" style="color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ acc.notes }}">
+                        {{ acc.notes|truncatechars:30 }}
+                    </td>
+                    <td>
+                        <div style="display:flex;gap:4px">
+                            <a href="/scrapers/{{ main_scraper.id }}/accounts/{{ acc.id }}/edit/"
+                               class="btn btn--ghost btn--sm">Edit</a>
+                            <form method="post" style="display:inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="delete_account">
+                                <input type="hidden" name="account_id" value="{{ acc.id }}">
+                                <button type="submit" class="btn btn--danger btn--sm"
+                                        onclick="return confirm('Delete account {{ acc.email }}?')">Delete</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">
+                        No accounts configured. Add one above.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<meta name="csrfmiddlewaretoken" content="{{ csrf_token }}">
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function toggleAccount(scraperId, accountId, checkbox) {
+    const csrfToken = document.querySelector('meta[name="csrfmiddlewaretoken"]').content;
+    fetch(`/scrapers/${scraperId}/accounts/${accountId}/toggle/`, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken, 'Content-Type': 'application/json'},
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            const row = document.getElementById(`account-row-${accountId}`);
+            const track = checkbox.parentElement.querySelector('.toggle-track');
+            const thumb = track.querySelector('.toggle-thumb');
+            if (data.is_active) {
+                row.style.opacity = '1';
+                track.style.background = 'var(--green)';
+                thumb.style.left = '18px';
+            } else {
+                row.style.opacity = '0.5';
+                track.style.background = 'var(--border)';
+                thumb.style.left = '2px';
+            }
+        }
+    })
+    .catch(err => console.error('Toggle error:', err));
+}
+</script>
+{% endblock %}

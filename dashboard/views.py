@@ -12,9 +12,13 @@ from django.utils import timezone
 from django.core.paginator import Paginator
 from django.contrib import messages
 
-from .models import MainScraper, SubScraper, ScraperRunHistory, ScraperProcess, ScraperSchedule
+from .models import (
+    MainScraper, SubScraper, ScraperRunHistory, ScraperProcess, ScraperSchedule,
+    ScraperAccount, ScraperConfig,
+)
 from .tasks import run_scraper_task
 from .schedule_utils import update_celery_schedule, get_next_runs, cron_to_readable
+
 
 
 def _mongo_safe(obj):
@@ -566,4 +570,236 @@ def watcher(request):
 
     return render(request, 'dashboard/watcher.html', {
         'watcher_data': watcher_data,
+    })
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Account Management & Control Panel views
+# ═══════════════════════════════════════════════════════════════════
+
+def account_management(request, pk):
+    """Account management page — list, toggle, edit accounts for a main scraper."""
+    main_scraper = get_object_or_404(MainScraper, pk=pk)
+    accounts = main_scraper.accounts.all()
+    config, _ = ScraperConfig.objects.get_or_create(
+        main_scraper=main_scraper,
+        defaults={'script_base_path': '', 'log_base_path': ''}
+    )
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action == 'add_account':
+            email = request.POST.get('email', '').strip()
+            password = request.POST.get('password', '').strip()
+            if email and password:
+                obj, created = ScraperAccount.objects.get_or_create(
+                    main_scraper=main_scraper, email=email,
+                    defaults={'password': password}
+                )
+                if created:
+                    messages.success(request, f'Account {email} added.')
+                else:
+                    messages.warning(request, f'Account {email} already exists.')
+            else:
+                messages.error(request, 'Email and password are required.')
+
+        elif action == 'delete_account':
+            acc_id = request.POST.get('account_id')
+            ScraperAccount.objects.filter(pk=acc_id, main_scraper=main_scraper).delete()
+            messages.success(request, 'Account deleted.')
+
+        elif action == 'bulk_toggle':
+            state = request.POST.get('state') == 'on'
+            main_scraper.accounts.all().update(is_active=state)
+            messages.success(request, f'All accounts {"activated" if state else "deactivated"}.')
+
+        return redirect('account_management', pk=pk)
+
+    active_count = accounts.filter(is_active=True).count()
+    distribution = config.get_distribution(active_count)
+
+    return render(request, 'dashboard/account_management.html', {
+        'main_scraper': main_scraper,
+        'accounts': accounts,
+        'config': config,
+        'active_count': active_count,
+        'total_count': accounts.count(),
+        'distribution': distribution,
+    })
+
+
+@csrf_exempt
+@require_POST
+def account_toggle(request, pk, account_id):
+    """AJAX: Toggle an account's active status."""
+    main_scraper = get_object_or_404(MainScraper, pk=pk)
+    account = get_object_or_404(ScraperAccount, pk=account_id, main_scraper=main_scraper)
+    account.is_active = not account.is_active
+    account.save(update_fields=['is_active', 'updated_at'])
+    return JsonResponse({'status': 'ok', 'is_active': account.is_active, 'email': account.email})
+
+
+def account_edit(request, pk, account_id):
+    """Edit a single account's email/password."""
+    main_scraper = get_object_or_404(MainScraper, pk=pk)
+    account = get_object_or_404(ScraperAccount, pk=account_id, main_scraper=main_scraper)
+
+    if request.method == 'POST':
+        account.email = request.POST.get('email', account.email).strip()
+        pwd = request.POST.get('password', '').strip()
+        if pwd:
+            account.password = pwd
+        account.notes = request.POST.get('notes', '')
+        account.save()
+        messages.success(request, f'Account {account.email} updated.')
+        return redirect('account_management', pk=pk)
+
+    return render(request, 'dashboard/account_edit.html', {
+        'main_scraper': main_scraper,
+        'account': account,
+    })
+
+
+def control_panel(request, pk):
+    """Control panel — run scrapers with configurable account splits."""
+    main_scraper = get_object_or_404(MainScraper, pk=pk)
+    config, _ = ScraperConfig.objects.get_or_create(
+        main_scraper=main_scraper,
+        defaults={'script_base_path': '', 'log_base_path': ''}
+    )
+    accounts = main_scraper.accounts.all()
+    active_accounts = accounts.filter(is_active=True)
+    active_count = active_accounts.count()
+    distribution = config.get_distribution(active_count)
+
+    sub_scrapers = main_scraper.sub_scrapers.prefetch_related('process', 'run_history').all()
+    sub_data = []
+    for sub in sub_scrapers:
+        process = getattr(sub, 'process', None)
+        is_running = process and process.is_running
+        last_run = sub.run_history.order_by('-started_at').first()
+        sub_data.append({
+            'sub': sub,
+            'is_running': is_running,
+            'status': 'running' if is_running else (last_run.status if last_run else 'never_run'),
+            'last_run': last_run,
+        })
+
+    return render(request, 'dashboard/control_panel.html', {
+        'main_scraper': main_scraper,
+        'config': config,
+        'accounts': accounts,
+        'active_count': active_count,
+        'total_count': accounts.count(),
+        'distribution': distribution,
+        'sub_data': sub_data,
+    })
+
+
+@require_POST
+def update_config(request, pk):
+    """Save scraper config (account splits, batch sizes, paths)."""
+    main_scraper = get_object_or_404(MainScraper, pk=pk)
+    config, _ = ScraperConfig.objects.get_or_create(main_scraper=main_scraper)
+
+    try:
+        config.update_account_count = int(request.POST.get('update_account_count', 0))
+        config.new_account_count = int(request.POST.get('new_account_count', 0))
+        config.update_ratio = float(request.POST.get('update_ratio', 0.8))
+        config.batch_size_new = int(request.POST.get('batch_size_new', 10))
+        config.batch_size_update = int(request.POST.get('batch_size_update', 10))
+        config.max_batches_new = int(request.POST.get('max_batches_new', 10))
+        config.max_batches_update = int(request.POST.get('max_batches_update', 50))
+        config.script_base_path = request.POST.get('script_base_path', '').strip()
+        config.log_base_path = request.POST.get('log_base_path', '').strip()
+        config.save()
+        messages.success(request, 'Configuration saved.')
+    except (ValueError, TypeError) as e:
+        messages.error(request, f'Invalid value: {e}')
+
+    return redirect('control_panel', pk=pk)
+
+
+@require_POST
+def run_with_config(request, pk):
+    """Launch a scraper run using the saved config — writes JSON config and fires Celery task."""
+    import tempfile
+    main_scraper = get_object_or_404(MainScraper, pk=pk)
+    config, _ = ScraperConfig.objects.get_or_create(main_scraper=main_scraper)
+
+    mode = request.POST.get('mode', 'all')  # all | new_only | update_only
+    sub_id = request.POST.get('sub_id')  # which SubScraper to run under
+
+    if not sub_id:
+        return JsonResponse({'status': 'error', 'message': 'No sub_scraper selected'}, status=400)
+
+    sub = get_object_or_404(SubScraper, pk=sub_id, main_scraper=main_scraper)
+
+    # Check if already running
+    process = getattr(sub, 'process', None)
+    if process and process.is_running:
+        return JsonResponse({'status': 'error', 'message': 'Scraper is already running'}, status=400)
+
+    # Build config JSON from database
+    active_accounts = main_scraper.accounts.filter(is_active=True)
+    if not active_accounts.exists():
+        return JsonResponse({'status': 'error', 'message': 'No active accounts'}, status=400)
+
+    distribution = config.get_distribution(active_accounts.count())
+
+    config_data = {
+        'accounts': [
+            {'email': acc.email, 'password': acc.password, 'active': True}
+            for acc in active_accounts
+        ],
+        'update_account_count': distribution['update'],
+        'new_account_count': distribution['new'],
+        'update_ratio': config.update_ratio,
+        'batch_size_new': config.batch_size_new,
+        'batch_size_update': config.batch_size_update,
+        'max_batches_new': config.max_batches_new,
+        'max_batches_update': config.max_batches_update,
+        'mode': mode,
+        'log_base_path': config.log_base_path or '/tmp/scraper_logs',
+        'mongo_uri': main_scraper.get_effective_mongo_uri(),
+    }
+
+    # Write config to temp file
+    config_dir = os.path.join(tempfile.gettempdir(), 'scraper_configs')
+    os.makedirs(config_dir, exist_ok=True)
+    config_path = os.path.join(config_dir, f'config_{main_scraper.pk}_{sub.pk}.json')
+    with open(config_path, 'w') as f:
+        json.dump(config_data, f, indent=2)
+
+    # Build run command
+    script_base = config.script_base_path or os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'crunchbase'
+    )
+    main_script = os.path.join(script_base, 'main.py')
+
+    run_command = f'python {main_script} --config-file {config_path} --mode {mode}'
+
+    # Temporarily set the run_command and fire the task
+    sub.run_command = run_command
+    sub.save(update_fields=['run_command'])
+
+    # Mark accounts as running
+    if mode in ('all', 'update_only'):
+        role = 'running_update'
+    else:
+        role = 'running_new'
+    active_accounts.update(status=role, last_used_at=timezone.now())
+
+    task = run_scraper_task.delay(sub.id, triggered_by='manual')
+
+    return JsonResponse({
+        'status': 'ok',
+        'message': f'Scraper "{sub.name}" started in {mode} mode',
+        'task_id': task.id,
+        'config': {
+            'update_accounts': distribution['update'],
+            'new_accounts': distribution['new'],
+            'mode': mode,
+        },
     })

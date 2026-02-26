@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import MainScraper, SubScraper, ScraperSchedule, ScraperRunHistory, ScraperProcess
+from .models import (
+    MainScraper, SubScraper, ScraperSchedule, ScraperRunHistory, ScraperProcess,
+    ScraperAccount, ScraperConfig,
+)
 
 @admin.register(MainScraper)
 class MainScraperAdmin(admin.ModelAdmin):
@@ -24,3 +27,14 @@ class ScraperRunHistoryAdmin(admin.ModelAdmin):
 @admin.register(ScraperProcess)
 class ScraperProcessAdmin(admin.ModelAdmin):
     list_display = ['sub_scraper', 'pid', 'is_running', 'started_at']
+
+@admin.register(ScraperAccount)
+class ScraperAccountAdmin(admin.ModelAdmin):
+    list_display = ['email', 'main_scraper', 'is_active', 'status', 'last_used_at']
+    list_filter = ['is_active', 'status', 'main_scraper']
+    search_fields = ['email']
+
+@admin.register(ScraperConfig)
+class ScraperConfigAdmin(admin.ModelAdmin):
+    list_display = ['main_scraper', 'update_account_count', 'new_account_count', 'update_ratio']
+

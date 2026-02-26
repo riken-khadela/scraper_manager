@@ -188,3 +188,77 @@ class ScraperProcess(models.Model):
 
     def __str__(self):
         return f"{self.sub_scraper.name} PID:{self.pid}"
+
+
+class ScraperAccount(models.Model):
+    """Stores individual login accounts for scrapers that need multi-account support."""
+    STATUS_CHOICES = [
+        ('idle', 'Idle'),
+        ('running_update', 'Running Update'),
+        ('running_new', 'Running New'),
+        ('error', 'Error'),
+    ]
+
+    main_scraper = models.ForeignKey(MainScraper, on_delete=models.CASCADE, related_name='accounts')
+    email = models.EmailField()
+    password = models.CharField(max_length=200)
+    is_active = models.BooleanField(default=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='idle')
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['id']
+        unique_together = ['main_scraper', 'email']
+
+    def __str__(self):
+        return f"{self.email} ({self.main_scraper.name})"
+
+
+class ScraperConfig(models.Model):
+    """Stores configurable defaults for a scraper group (e.g. account splits, batch sizes)."""
+    main_scraper = models.OneToOneField(MainScraper, on_delete=models.CASCADE, related_name='scraper_config')
+
+    # Account distribution
+    update_account_count = models.IntegerField(
+        default=0, help_text="Fixed number of accounts for update scraper (0 = use ratio)"
+    )
+    new_account_count = models.IntegerField(
+        default=0, help_text="Fixed number of accounts for new scraper (0 = use ratio)"
+    )
+    update_ratio = models.FloatField(
+        default=0.8, help_text="Ratio of active accounts for update when counts are 0 (auto mode)"
+    )
+
+    # Batch settings
+    batch_size_new = models.IntegerField(default=10)
+    batch_size_update = models.IntegerField(default=10)
+    max_batches_new = models.IntegerField(default=10)
+    max_batches_update = models.IntegerField(default=50)
+
+    # Paths
+    script_base_path = models.CharField(
+        max_length=500, blank=True, help_text="Base path to scraper scripts directory"
+    )
+    log_base_path = models.CharField(
+        max_length=500, blank=True, help_text="Base path for log output"
+    )
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Config for {self.main_scraper.name}"
+
+    def get_distribution(self, active_count):
+        """Calculate update/new account split based on config."""
+        if self.update_account_count > 0 or self.new_account_count > 0:
+            update = min(self.update_account_count, active_count)
+            new = min(self.new_account_count, max(0, active_count - update))
+            return {'update': update, 'new': new}
+        # Auto mode: use ratio
+        update = int(active_count * self.update_ratio)
+        new = active_count - update
+        return {'update': update, 'new': new}
