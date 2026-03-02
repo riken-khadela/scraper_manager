@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.urls import path, include
 from dashboard import views, api_views
+from django.conf.urls.static import static
+from django.conf import settings
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -39,3 +41,5 @@ urlpatterns = [
     path('api/send-input/<int:sub_id>/', api_views.api_send_input, name='api_send_input'),
 ]
 
+
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

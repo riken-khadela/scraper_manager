@@ -34,3 +34,5 @@ __MACOSX/
 
 # Documentation
 docs/
+
+*.out

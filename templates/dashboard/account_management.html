@@ -41,7 +41,7 @@
     </div>
     <div class="stat-card">
         <span class="stat-label">Inactive</span>
-        <span class="stat-value" style="color:var(--red)">{{ total_count|add:"-"|add:active_count }}</span>
+        <span class="stat-value" style="color:var(--red)">{{ total_count - active_count }}</span>
     </div>
     <div class="stat-card">
         <span class="stat-label">Update Threads</span>
@@ -59,13 +59,13 @@
         <span class="card-title">Quick Actions</span>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             <form method="post" style="display:inline">
-                {% csrf_token %}
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 <input type="hidden" name="action" value="bulk_toggle">
                 <input type="hidden" name="state" value="on">
                 <button type="submit" class="btn btn--success btn--sm">Activate All</button>
             </form>
             <form method="post" style="display:inline">
-                {% csrf_token %}
+                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                 <input type="hidden" name="action" value="bulk_toggle">
                 <input type="hidden" name="state" value="off">
                 <button type="submit" class="btn btn--danger btn--sm">Deactivate All</button>
@@ -74,7 +74,7 @@
     </div>
     <div class="card-body" style="padding:16px">
         <form method="post" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-            {% csrf_token %}
+            <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
             <input type="hidden" name="action" value="add_account">
             <div class="form-group" style="flex:1;min-width:200px;margin:0">
                 <label class="form-label">Email</label>
@@ -115,7 +115,7 @@
             <tbody>
                 {% for acc in accounts %}
                 <tr id="account-row-{{ acc.id }}" style="{% if not acc.is_active %}opacity:0.5{% endif %}">
-                    <td class="font-mono text-sm" style="color:var(--text-muted)">{{ forloop.counter }}</td>
+                    <td class="font-mono text-sm" style="color:var(--text-muted)">{{ loop.index }}</td>
                     <td>
                         <span class="font-mono text-sm" style="color:var(--text-primary);font-weight:500">{{ acc.email }}</span>
                     </td>
@@ -151,18 +151,18 @@
                     </td>
                     <td class="text-sm" style="color:var(--text-muted)">
                         {% if acc.last_used_at %}
-                        {{ acc.last_used_at|date:"Y-m-d H:i" }}
+                        {{ acc.last_used_at.strftime('%Y-%m-%d %H:%M') }}
                         {% else %}—{% endif %}
                     </td>
                     <td class="text-sm" style="color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ acc.notes }}">
-                        {{ acc.notes|truncatechars:30 }}
+                        {{ acc.notes[:30] if acc.notes else '' }}
                     </td>
                     <td>
                         <div style="display:flex;gap:4px">
                             <a href="/scrapers/{{ main_scraper.id }}/accounts/{{ acc.id }}/edit/"
                                class="btn btn--ghost btn--sm">Edit</a>
                             <form method="post" style="display:inline">
-                                {% csrf_token %}
+                                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
                                 <input type="hidden" name="action" value="delete_account">
                                 <input type="hidden" name="account_id" value="{{ acc.id }}">
                                 <button type="submit" class="btn btn--danger btn--sm"
@@ -171,7 +171,7 @@
                         </div>
                     </td>
                 </tr>
-                {% empty %}
+                {% else %}
                 <tr>
                     <td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">
                         No accounts configured. Add one above.
